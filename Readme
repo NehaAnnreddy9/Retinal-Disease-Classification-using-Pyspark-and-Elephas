@@ -1,0 +1,146 @@
+Retinal Disease Classification 
+ 
+Introduction:
+
+Retinal diseases can lead to irreversible visual impairment due to lack of timely diagnosis and appropriate 
+treatments. Automated detection of retinal disorders on retinal OCT images would be of enormous 
+benefit, which could help ophthalmologists to evaluate and treat the eye diseases more efficiently. This 
+project aims to build a diagnostic tool based on a deep-learning framework for the screening of patients 
+with common blinding retinal diseases.
+
+
+Dataset:
+
+The dataset is available on Kaggle with 1000s of images belonging to 4 classes, namely CNV, DME, 
+DRUSEN, NORMAL (the diseases). Here’s the quantity of images provided for each dataset:
+Dataset CNV DME DRUSEN NORMAL
+val 8 8 8 8
+test 242 242 242 242
+train 37,205 11,348 8,616 26,315
+Figure 1: A sample OCT image of each class
+
+
+Tasks:
+
+✓ Read all the images using Spark, vectorize them, and apply any image transformations.
+✓ Configure and optimize a CNN model using Keras.
+✓ Use Elephas to integrate Keras with PySpark for deep learning and build a CNN for Image 
+classification.
+✓ Perform Hyperparameter tuning to improve the performance of the model.
+
+
+Contemplated Approaches:
+
+1. SparkDL:
+
+A library called spark-deep-learning by Databricks is available for performing deep learning in 
+PySpark. Though attempts were made to use this library, the supporting JAR, and the library itself 
+are not updated recently to work with latest Spark and TensorFlow.
+
+2. Limitations with Elephas and PySpark:
+
+PySpark is limited to 1D vectorsin DataFrames and RDDs, and most of the transfer learning models 
+expect a 3D input. Due to this, though Elephas might support it, transfer learning is not possible 
+in this approach.
+
+3. Reading images in PySpark:
+
+As there weren’t any easy ways to read the images, transforming them into desired format and 
+then feeding them to the CNN, many approaches to perform this have failed. If Pandas or NumPy 
+were used on the images directly, the performance was too low. Also, sequences of the data with 
+same labels in the train/test dataset caused issues with Deep Learning models. All these issues 
+were resolved and discussed in the Implemented Approach.
+
+
+Implemented Approach:
+
+The implemented approach performs the following:
+
+▪ For a given dataset (train/test), the images of each class are read using sc.binaryFiles(), which 
+provides the raw data for each image. This is then transformed into byte array of IMAGE_SIZE
+dimensions and flattened. This 1D vector is the labelled with its class number.
+
+▪ Then using keras.Sequential(), the Convolutional Neural Network (CNN) is built, which when 
+visualized using visualkeras looks as follows:
+
+Figure 2: The Layers of the implemented Convolutional Neural Network (CNN)
+
+▪ As the input is from PySpark, through Elephas, to the Keras layers it is a 1D Dense Vector. So, the 
+input is reshaped in the Reshape layer, then fed to the following layers and eventually reduced to 
+a vector of size 4. The dataset is then balanced to make sure bias for class with more images 
+doesn’t build.
+
+▪ The ElephasEstimator() is used to optimize the model.
+
+▪ The model is then trained with 1000s of images of each class from the train dataset.
+
+▪ Then, the classes for the images from the test dataset are predicted. The output, a vector of size 
+4, is the list of probabilities of the image belonging to a class. The class with the maximum 
+probability is assigned to the image.
+
+
+Hyperparameter Tuning:
+
+▪ Image size: After testing for various image size and vector dimensions, (64, 64, 3) size is chosen 
+considering the performance of the model and storage issues.
+▪ Image conversion: Various approaches such as using opencv to read image, transforming image 
+using pandas, applying filters to the image were tried. At last, reading the images using spark, 
+then transforming them into a binary array and then to NumPy array, and then reshaping them 
+gave the best performance.
+▪ Dataset shuffling: As the images are read one class after the other and combined, the images of 
+the same class are always together due to which, the model gave issues. To resolve this, the data 
+in the dataset is shuffled such that any 4 consecutive rows belong to different classes.
+▪ CNN layers: While testing the model, various combinations of layers and dimensions within them 
+were tested. Finally, the layers mentioned previously gave the best results.
+▪ ElephasEstimator: After various trials optimizer=SGD(lr=0.01), validation_split=0.15, 
+loss_function= categorical_crossentropy, provided the best results.
+▪ Precision: The weightedPrecision and weightedFMeasure of MulticlassMetrics from PySpark mllib 
+library is considered to test the performance of the model.
+
+
+Results:
+
+Following are the Weighted Precisions for various approaches:
+
+Approach Weighted Precision Weighted F-score
+test and val train and test test and val train and test
+Using Pandas for image conversion ~80% Did not complete ~75% Did not complete
+Using only 1D input and just reducing 
+dimensions in the CNN
+~76% ~64% ~68% ~55%
+Adam and Adamax Optimizers
+(weirdly, predicted only one class)
+100% Did not try 100% Did not try
+Additional layer of Conv2D and 
+MaxPooling2D
+~78% 60-65% ~60% ~54%
+Implemented Approach ~87.5% 70-74% ~75% 65-68%
+
+
+Conclusion:
+
+The predictions look promising, and this model can mostly predict the disease based on the OCT images
+and assist in identifying the diseases in the eye before an expert’s review.
+The implemented model ran faster and provided better results than the other models. The model was 
+tested on Kaggle in a Notebook. The parallelism of PySpark and the GPU utilization of TensorFlow gave a 
+lot of speed boost. For instance, a sample code on the test and val datasets ran for 18 minutes on a local 
+machine, whereas on Kaggle notebook with GPU enabled, it ran for 55 seconds!. Massive datasets can be 
+easily tackled with this combination of Keras and PySpark.
+
+Directions for future work:
+
+1. Further combinations of layers can be tried to achieve better performance of the model.
+
+2. Considering SparkDL’s discontinued support for latest Spark and TensorFlow libraries, and 
+PySpark’s limitation to store 3D arrays, Transfer Learning couldn’t be implemented in this project. 
+Further research into finding feasible ways; or new modules in the future could make it possible.
+
+References:
+
+• Elephas - https://github.com/maxpumperla/elephas
+• Inspiration for CNN using Sequential - https://towardsdatascience.com/build-your-own￾convolution-neural-network-in-5-mins-4217c2cf964f
+• Inspiration for Deep Learning in PySpark - https://goois.net/7-deep-learning-next￾generation-machine-learning-with-spark-covers-xgboost-lightgbm-spark-nlp-distributed￾deep-learning-with-keras-and-more.html#PC13
+• SparkDL approach - https://towardsdatascience.com/distributed-deep-learning-pipelines￾with-pyspark-and-keras-a3a1c22b9239
+• Elephas examples - https://punndeeplearningblog.com/tutorial/distributed-deep-learning￾with-elephas/
+• Deep Learning Pipelines -
+https://community.ibm.com/community/user/datascience/blogs/andre￾violante1/2019/06/21/distributed-deep-learning-pipelines-with-pyspark-a
